@@ -1,0 +1,5 @@
+devices:
+  'Doorbell':
+    topic: 'doorbell/{kind}'
+  'Camera':
+    topic: 'camera/{kind}'
