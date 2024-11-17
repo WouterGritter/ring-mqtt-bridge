@@ -127,7 +127,7 @@ def ring_event_handler(event: RingEvent):
         'is_update': event.is_update,
     }
 
-    for topic_format, value_format in device_config['topics']:
+    for topic_format, value_format in device_config['topics'].items():
         topic = topic_format.format(**parameters)
         value = value_format.format(**parameters)
 
