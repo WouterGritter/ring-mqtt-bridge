@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from datetime import datetime
 from pprint import pprint
 from typing import Callable, Awaitable, Optional
 
@@ -32,6 +33,8 @@ MQTT_RETAIN = os.getenv('MQTT_RETAIN', 'false') == 'true'
 OTP_SERVER_PORT = int(os.getenv('OTP_SERVER_PORT', '5000'))
 PROXIED_OTP_URL = os.getenv('PROXIED_OTP_URL', f'http://localhost:{OTP_SERVER_PORT}')
 
+SECONDS_UNTIL_IDLE = int(os.getenv('SECONDS_UNTIL_IDLE', '150'))
+
 DEVICES_CONFIG_FILE = os.getenv('DEVICES_CONFIG_FILE', 'devices.yml')
 with open(DEVICES_CONFIG_FILE, 'r') as file:
     DEVICES = yaml.safe_load(file)['devices']
@@ -40,21 +43,7 @@ otp_provider = OtpProvider(OTP_SERVER_PORT)
 
 mqttc: Optional[mqtt.Client] = None
 
-
-def ring_event_handler(event: RingEvent):
-    device_config = DEVICES.get(event.device_name, None)
-    if device_config is None:
-        print(f'Received event from unconfigured device \'{event.device_name}\'')
-        pprint(event)
-        return
-
-    print(f'Received event from device \'{event.device_name}\'')
-    pprint(event)
-
-    topic = device_config['topic'].format(kind=event.kind)
-    value = event.state
-
-    mqttc.publish(topic, value, qos=MQTT_QOS, retain=MQTT_RETAIN)
+last_updated: dict[str, datetime] = {}  # dict[topic, last_update_time]
 
 
 async def provide_otp() -> str:
@@ -116,6 +105,46 @@ async def setup_ring_event_listener(ring: Ring, credentials_cache_file='credenti
     return event_listener
 
 
+def ring_event_handler(event: RingEvent):
+    device_config = DEVICES.get(event.device_name, None)
+    if device_config is None:
+        print(f'Received event from unconfigured device \'{event.device_name}\'')
+        pprint(event)
+        return
+
+    print(f'Received event from device \'{event.device_name}\'')
+    pprint(event)
+
+    parameters = {
+        'id': event.id,
+        'doorbot_id': event.doorbot_id,
+        'device_name': event.device_name,
+        'device_kind': event.device_kind,
+        'now': event.now,
+        'expires_in': event.expires_in,
+        'kind': event.kind,
+        'state': event.state,
+        'is_update': event.is_update,
+    }
+
+    for topic_format, value_format in device_config['topics']:
+        topic = topic_format.format(**parameters)
+        value = value_format.format(**parameters)
+
+        mqttc.publish(topic, value, qos=MQTT_QOS, retain=MQTT_RETAIN)
+        last_updated[topic] = datetime.now()
+
+
+def update_idle_topics():
+    now = datetime.now()
+    for topic, update_time in list(last_updated.items()):
+        since_updated = (now - update_time).total_seconds()
+        if since_updated > SECONDS_UNTIL_IDLE:
+            print(f'Setting idle state for topic {topic}')
+            mqttc.publish(topic, 'idle', qos=MQTT_QOS, retain=MQTT_RETAIN)
+            del last_updated[topic]
+
+
 async def main() -> None:
     global mqttc
 
@@ -129,6 +158,7 @@ async def main() -> None:
     print(f'RING_PASSWORD={"*" * len(RING_PASSWORD)}')
     print(f'{OTP_SERVER_PORT=}')
     print(f'{PROXIED_OTP_URL=}')
+    print(f'{SECONDS_UNTIL_IDLE=}')
     print(f'{DEVICES_CONFIG_FILE=}')
     print(f'{DEVICES=}')
 
@@ -146,6 +176,7 @@ async def main() -> None:
 
     print('Listening...')
     while True:
+        update_idle_topics()
         await asyncio.sleep(1.0)
 
 

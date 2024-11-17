@@ -1,5 +1,7 @@
 devices:
   'Doorbell':
-    topic: 'doorbell/{kind}'
+    topics:
+      'doorbell/{kind}': '{state}'
   'Camera':
-    topic: 'camera/{kind}'
+    topics:
+      'camera/{kind}': '{state}'
