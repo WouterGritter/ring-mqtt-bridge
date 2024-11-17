@@ -28,7 +28,7 @@ RING_PASSWORD = os.getenv('RING_PASSWORD')
 MQTT_BROKER_ADDRESS = os.getenv('MQTT_BROKER_ADDRESS', 'localhost')
 MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 MQTT_QOS = int(os.getenv('MQTT_QOS', '0'))
-MQTT_RETAIN = os.getenv('MQTT_RETAIN', 'false') == 'true'
+MQTT_RETAIN = os.getenv('MQTT_RETAIN', 'true') == 'true'
 
 OTP_SERVER_PORT = int(os.getenv('OTP_SERVER_PORT', '5000'))
 PROXIED_OTP_URL = os.getenv('PROXIED_OTP_URL', f'http://localhost:{OTP_SERVER_PORT}')
